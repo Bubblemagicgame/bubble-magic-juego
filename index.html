@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bubble Magic – ¡Explota las burbujas!</title>
+<style>
+:root{--pink:#f7a8d4;--purple:#b7a5f7;--blue:#9bd8ff;--ink:#563d73}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);
+background:radial-gradient(circle at 10% 15%,#fff 0 2%,transparent 22%),linear-gradient(135deg,#ffe5f3,#e8e3ff 48%,#dff5ff);
+display:flex;justify-content:center;padding:22px}
+main{width:min(850px,100%);text-align:center}
+h1{font-size:clamp(2rem,6vw,3.7rem);margin:8px 0 4px;color:#bd5fa5;text-shadow:0 3px #fff}
+.subtitle{margin:0 0 18px;font-size:1.05rem}
+.panel{background:#ffffffc9;border:2px solid #fff;border-radius:28px;padding:18px;box-shadow:0 12px 35px #9a78b833}
+.stats{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin:10px 0 18px}
+.stat{background:#fff;border-radius:16px;padding:9px 18px;min-width:110px;font-weight:700}
+.stat span{display:block;font-size:1.5rem;color:#b653a1}
+#playfield{display:grid;grid-template-columns:repeat(5,minmax(48px,1fr));gap:clamp(8px,2vw,18px);padding:8px 0 16px}
+.bubble{aspect-ratio:1;border:3px solid #ffffffc9;border-radius:50%;cursor:pointer;position:relative;overflow:hidden;
+box-shadow:inset -8px -10px 16px #00000012,0 7px 12px #8060a533;transition:transform .12s}
+.bubble:before{content:"";position:absolute;left:18%;top:14%;width:28%;height:16%;border-radius:50%;background:#ffffffb8;transform:rotate(-35deg)}
+.bubble:hover{transform:scale(1.07)}
+.bubble:active{transform:scale(.9)}
+.bubble.popped{visibility:hidden;pointer-events:none}
+.red{background:radial-gradient(circle at 30% 25%,#ffb0b0,#f04b68 65%,#cf315c)}
+.blue{background:radial-gradient(circle at 30% 25%,#d4f4ff,#55b9f2 65%,#3985d8)}
+.yellow{background:radial-gradient(circle at 30% 25%,#fff7bd,#ffcf4c 65%,#ee9e28)}
+.pink{background:radial-gradient(circle at 30% 25%,#ffe0f4,#f58acb 65%,#d85aa8)}
+.green{background:radial-gradient(circle at 30% 25%,#d7ffe3,#65d79a 65%,#2da96e)}
+button{border:0;border-radius:999px;padding:12px 20px;font-size:1rem;font-weight:750;cursor:pointer;background:#bd65ae;color:white;box-shadow:0 4px 0 #914b91;margin:5px}
+button.secondary{background:#7186ce;box-shadow:0 4px 0 #5265a5}
+button:focus-visible,.bubble:focus-visible{outline:4px solid #4c72d8;outline-offset:3px}
+#message{min-height:34px;font-size:1.15rem;font-weight:800;color:#a64e9b;margin:6px}
+#soundNote{font-size:.85rem;opacity:.8;margin-top:12px}
+.spark{position:fixed;pointer-events:none;font-size:22px;animation:fly .75s ease-out forwards;z-index:5}
+@keyframes fly{0%{opacity:1;transform:translate(0,0) scale(.6)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1.5) rotate(100deg)}}
+@media(max-width:480px){body{padding:10px}.panel{padding:12px}.stat{min-width:90px;padding:7px 12px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>🫧 Bubble Magic 🫧</h1>
+  <p class="subtitle">¡Explota las burbujas de todos los colores!</p>
+  <section class="panel" aria-label="Juego de burbujas">
+    <div class="stats">
+      <div class="stat">Puntos<span id="score">0</span></div>
+      <div class="stat">Burbujas<span id="count">0 / 15</span></div>
+    </div>
+    <div id="playfield" aria-label="Burbujas para explotar"></div>
+    <div id="message" aria-live="polite">¡Toca una burbuja para comenzar!</div>
+    <button id="newGame">Nuevas burbujas</button>
+    <button id="soundToggle" class="secondary" aria-pressed="true">🔊 Sonido activado</button>
+    <div id="soundNote">Consejo: activa el sonido de tu dispositivo para escuchar los efectos.</div>
+  </section>
+  <p>❤️ ¡Gracias por jugar! Comparte la diversión con tu familia.</p>
+</main>
+<script>
+const colors=["red","blue","yellow","pink","green"];
+const names={red:"roja",blue:"azul",yellow:"amarilla",pink:"rosa",green:"verde"};
+const field=document.getElementById("playfield"), scoreEl=document.getElementById("score"), countEl=document.getElementById("count"), message=document.getElementById("message"), soundBtn=document.getElementById("soundToggle");
+let score=0,popped=0,soundOn=true,audioCtx=null;
+function sound(color){
+ if(!soundOn)return;
+ try{
+  audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==="suspended") audioCtx.resume();
+  const osc=audioCtx.createOscillator(), gain=audioCtx.createGain();
+  const now=audioCtx.currentTime;
+  const freqs={red:260,blue:420,yellow:700,pink:560,green:340};
+  osc.type="sine";osc.frequency.setValueAtTime(freqs[color],now);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(100,freqs[color]*.55),now+.12);
+  gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.18,now+.012);gain.gain.exponentialRampToValueAtTime(.0001,now+.19);
+  osc.connect(gain);gain.connect(audioCtx.destination);osc.start(now);osc.stop(now+.2);
+ }catch(e){}
+}
+function sparkle(x,y){
+ const symbols=["✨","⭐","💫","✦"];
+ for(let i=0;i<7;i++){
+  const s=document.createElement("span");s.className="spark";s.textContent=symbols[i%symbols.length];
+  s.style.left=x+"px";s.style.top=y+"px";s.style.setProperty("--dx",(Math.random()*130-65)+"px");s.style.setProperty("--dy",(Math.random()*-110-15)+"px");
+  document.body.appendChild(s);setTimeout(()=>s.remove(),800);
+ }
+}
+function update(){scoreEl.textContent=score;countEl.textContent=`${popped} / 15`;}
+function pop(btn,color){
+ if(btn.classList.contains("popped"))return;
+ const r=btn.getBoundingClientRect();sparkle(r.left+r.width/2,r.top+r.height/2);sound(color);
+ btn.classList.add("popped");score++;popped++;update();
+ if(popped===5)message.textContent="¡Muy bien! ¡Sigue así! ⭐";
+ else if(popped===10)message.textContent="¡Increíble! ¡Ya casi terminas! 🌈";
+ else if(popped===15)message.textContent="🎉 ¡Felicidades! ¡Explotaste todas las burbujas! 🎉";
+ else message.textContent=`¡Pop! ¡Burbujita ${names[color]}!`;
+}
+function newGame(){
+ score=0;popped=0;update();message.textContent="¡Toca una burbuja para comenzar!";
+ field.innerHTML="";
+ for(let i=0;i<15;i++){
+  const color=colors[i%5],b=document.createElement("button");
+  b.className=`bubble ${color}`;b.type="button";b.setAttribute("aria-label",`Explotar burbuja ${names[color]}`);
+  b.addEventListener("click",()=>pop(b,color));field.appendChild(b);
+ }
+}
+document.getElementById("newGame").addEventListener("click",newGame);
+soundBtn.addEventListener("click",()=>{soundOn=!soundOn;soundBtn.textContent=soundOn?"🔊 Sonido activado":"🔇 Sonido apagado";soundBtn.setAttribute("aria-pressed",String(soundOn));if(soundOn)sound("yellow");});
+newGame();
+</script>
+</body>
+</html>
